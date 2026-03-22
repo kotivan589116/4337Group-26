@@ -9,6 +9,15 @@
     <Grid>
         <Label Content="Ivan" HorizontalAlignment="Left" Margin="129,91,0,0" VerticalAlignment="Top"/>
         <Label Content="18" HorizontalAlignment="Left" Margin="129,136,0,0" VerticalAlignment="Top"/>
-
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="11*"/>
+            </Grid.RowDefinitions>
+            <UniformGrid Grid.Row="0" Columns="2">
+                <Button x:Name="BnExport" Click="BnExport_Click">Экспорт в Excel</Button>
+                <Button x:Name="BnImport" Click="BnImport_Click">Импорт данных</Button>
+            </UniformGrid>
+        </Grid>
     </Grid>
 </Window>
