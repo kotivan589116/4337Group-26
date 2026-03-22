@@ -6,5 +6,11 @@ namespace Group4337
     {
         public MainWindow()
             => InitializeComponent();
+
+        private void Lunin_4337(object sender, RoutedEventArgs e)
+        {
+            var form = new _4337_Lunin();
+            form.Show();
+        }
     }
 }

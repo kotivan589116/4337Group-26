@@ -50,9 +50,7 @@
                     <RowDefinition />
                 </Grid.RowDefinitions>
 
-                <!-- Места для добавления элементов управления -->
-
-                <!---->
+                <Button Grid.Row="12" Content="Инфа" Click="Lunin_4337"/>
 
             </Grid>
         </Grid>
