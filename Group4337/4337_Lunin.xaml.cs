@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,7 +28,69 @@ namespace Group4337
         {
             InitializeComponent();
         }
-     
+        private async void BnImportJson_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                OpenFileDialog ofd = new OpenFileDialog()
+                {
+                    DefaultExt = "*.json",
+                    Filter = "JSON файлы (*.json)|*.json|Все файлы (*.*)|*.*",
+                    Title = "Выберите JSON файл с данными клиентов"
+                };
+
+                if (!(ofd.ShowDialog() == true))
+                    return;
+
+                // Читаем JSON напрямую как массив
+                using (FileStream fs = new FileStream(ofd.FileName, FileMode.Open))
+                {
+                    var clientsArray = await JsonSerializer.DeserializeAsync<Clients[]>(fs);
+
+                    if (clientsArray == null || clientsArray.Length == 0)
+                    {
+                        MessageBox.Show("JSON файл пуст или имеет неверный формат", "Ошибка",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    using (ClientsEntities db = new ClientsEntities())
+                    {
+                        foreach (var client in clientsArray)
+                        {
+                            // Расчет возраста и категории
+                            int age = DateTime.Today.Year - client.BirthDate.Value.Year;
+                            if (client.BirthDate.Value.Date > DateTime.Today.AddYears(-age)) age--;
+
+                            string category = "";
+                            if (age >= 20 && age <= 29)
+                                category = "Категория 1 (20-29)";
+                            else if (age >= 30 && age <= 39)
+                                category = "Категория 2 (30-39)";
+                            else if (age >= 40)
+                                category = "Категория 3 (40+)";
+                            else
+                                category = "Младше 20";
+
+                            client.Age = age;
+                            client.AgeCategory = category;
+
+                            db.Clients.Add(client);
+                        }
+
+                        db.SaveChanges();
+                        MessageBox.Show($"Загружено записей: {clientsArray.Length}\n" +
+                                       $"Всего в БД: {db.Clients.Count()}",
+                            "Импорт JSON завершен", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при импорте данных:\n{ex.Message}",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
         private void BnImport_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog()
@@ -154,6 +217,95 @@ namespace Group4337
                 }
 
                 app.Visible = true;
+            }
+        }
+        private void BnExportWord_Click(object sender, RoutedEventArgs e)
+        {
+            using (ClientsEntities db = new ClientsEntities())
+            {
+                var allClients = db.Clients.ToList().OrderBy(c => c.FullName).ToList();
+
+                var clientsByCategory = allClients.GroupBy(c => c.AgeCategory).ToList();
+
+                var app = new Word.Application();
+                Word.Document document = app.Documents.Add();
+
+                foreach (var category in clientsByCategory)
+                {
+                    // Заголовок категории (вместо группы)
+                    Word.Paragraph paragraph = document.Paragraphs.Add();
+                    Word.Range range = paragraph.Range;
+                    range.Text = category.Key;
+                    paragraph.set_Style("Заголовок 1");
+                    range.InsertParagraphAfter();
+
+                    // Таблица клиентов
+                    Word.Paragraph tableParagraph = document.Paragraphs.Add();
+                    Word.Range tableRange = tableParagraph.Range;
+                    Word.Table clientsTable = document.Tables.Add(tableRange, category.Count() + 1, 5);
+
+                    // Оформление таблицы
+                    clientsTable.Borders.InsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
+                    clientsTable.Borders.OutsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
+                    clientsTable.Range.Cells.VerticalAlignment = Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter;
+
+                    // Заголовки колонок
+                    clientsTable.Cell(1, 1).Range.Text = "Код клиента";
+                    clientsTable.Cell(1, 2).Range.Text = "ФИО";
+                    clientsTable.Cell(1, 3).Range.Text = "E-mail";
+                    clientsTable.Cell(1, 4).Range.Text = "Дата рождения";
+                    clientsTable.Cell(1, 5).Range.Text = "Возраст";
+
+                    clientsTable.Rows[1].Range.Bold = 1;
+                    clientsTable.Rows[1].Range.ParagraphFormat.Alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                    // Заполнение данными
+                    int i = 1;
+                    foreach (var client in category)
+                    {
+                        // Код клиента
+                        clientsTable.Cell(i + 1, 1).Range.Text = client.Code;
+                        clientsTable.Cell(i + 1, 1).Range.ParagraphFormat.Alignment =
+                            Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                        // ФИО
+                        clientsTable.Cell(i + 1, 2).Range.Text = client.FullName;
+                        clientsTable.Cell(i + 1, 2).Range.ParagraphFormat.Alignment =
+                            Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                        // E-mail
+                        clientsTable.Cell(i + 1, 3).Range.Text = client.Email;
+                        clientsTable.Cell(i + 1, 3).Range.ParagraphFormat.Alignment =
+                            Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                        // Дата рождения
+                        clientsTable.Cell(i + 1, 4).Range.Text = client.BirthDate?.ToShortDateString();
+                        clientsTable.Cell(i + 1, 4).Range.ParagraphFormat.Alignment =
+                            Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                        // Возраст
+                        clientsTable.Cell(i + 1, 5).Range.Text = client.Age.ToString();
+                        clientsTable.Cell(i + 1, 5).Range.ParagraphFormat.Alignment =
+                            Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+                        i++;
+                    }
+
+                    // Итоговая строка
+                    Word.Paragraph countClientsParagraph = document.Paragraphs.Add();
+                    Word.Range countClientsRange = countClientsParagraph.Range;
+                    countClientsRange.Text = $"Количество клиентов в категории — {category.Count()}";
+                    countClientsRange.Font.Color = Word.WdColor.wdColorDarkRed;
+                    countClientsRange.InsertParagraphAfter();
+
+                    // Разрыв страницы
+                    document.Words.Last.InsertBreak(Word.WdBreakType.wdPageBreak);
+                }
+
+                // Отображение и сохранение
+                app.Visible = true;
+                document.SaveAs2(@"C:\Users\Ivan\Documents\Clients.docx");
+                document.SaveAs2(@"C:\Users\Ivan\Documents\Clients.pdf", Word.WdExportFormat.wdExportFormatPDF);
             }
         }
     }
